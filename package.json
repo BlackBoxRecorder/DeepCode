@@ -1,0 +1,18 @@
+{
+  "name": "deepcode",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lightweight terminal AI agent, similar to Claude Code",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "clean": "pnpm -r exec rm -rf dist",
+    "start": "node packages/agent/dist/cli.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,36 @@
+{
+    "name": "@timetickme/agent",
+    "version": "1.0.0",
+    "description": "ReAct-based terminal AI agent core",
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "bin": {
+        "deepcode": "dist/cli.js"
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "clean": "rm -rf dist",
+        "start": "node dist/cli.js"
+    },
+    "keywords": [
+        "ai-agent",
+        "react",
+        "terminal"
+    ],
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.8.3"
+    },
+    "dependencies": {
+        "@timetickme/llm": "workspace:*",
+        "@timetickme/tool-interface": "workspace:*",
+        "@timetickme/bash-tool": "workspace:*",
+        "@timetickme/fs-tool": "workspace:*"
+    }
+}

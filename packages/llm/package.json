@@ -1,0 +1,26 @@
+{
+    "name": "@timetickme/llm",
+    "version": "1.0.0",
+    "description": "DeepSeek API client for AI agent LLM integration",
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "clean": "rm -rf dist"
+    },
+    "keywords": [
+        "deepseek",
+        "llm",
+        "ai-agent"
+    ],
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.8.3"
+    }
+}

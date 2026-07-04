@@ -4,13 +4,16 @@
  * Sits between CLI (display) and AgentRunner + SessionManager (logic + persistence).
  * Owns conversation state so display adapters (CLI, future TUI) don't need to.
  */
-import type { Message } from "./llm/index.js";
-import type { AgentStreamEvent, AgentResult } from "./index.js";
+import type { Message, LLMClient } from "./llm/index.js";
+import type { AgentStreamEvent, AgentResult, Agent } from "./index.js";
 import type { AgentRunner, AgentMode } from "./runner/index.js";
+import { PlanExecuteRunner } from "./runner/index.js";
 import {
   SessionManager,
   type SessionMeta,
   type TurnRecord,
+  type PlanRecord,
+  type SubTaskRecord,
 } from "./session.js";
 
 // ============================================================================
@@ -28,6 +31,10 @@ export type TurnEvent =
 export interface CoordinatorConfig {
   runner: AgentRunner;
   sessionManager: SessionManager;
+  /** LLM client — required for Plan-Execute mode switching. */
+  llm?: LLMClient;
+  /** Agent — required for Plan-Execute mode switching. */
+  agent?: Agent;
 }
 
 // ============================================================================
@@ -37,11 +44,15 @@ export interface CoordinatorConfig {
 export class ConversationCoordinator {
   private currentRunner: AgentRunner;
   private sessionManager: SessionManager;
+  private llm: LLMClient | undefined;
+  private agent: Agent | undefined;
   private _sessionId: string | null = null;
 
   constructor(config: CoordinatorConfig) {
     this.currentRunner = config.runner;
     this.sessionManager = config.sessionManager;
+    this.llm = config.llm;
+    this.agent = config.agent;
   }
 
   // ==========================================================================
@@ -62,17 +73,35 @@ export class ConversationCoordinator {
 
   /**
    * Switch the Agent Loop mode.
-   * Initially only "react" is implemented; other modes will be added in
-   * future slices.
    */
   setMode(mode: AgentMode): void {
-    if (mode !== "react") {
+    if (mode === this.currentRunner.mode) return; // Already in this mode
+
+    if (mode === "plan-execute") {
+      if (!this.llm || !this.agent) {
+        throw new Error(
+          "Cannot switch to plan-execute: coordinator was not configured with LLM and Agent.",
+        );
+      }
+      const newRunner = new PlanExecuteRunner(this.llm, this.agent);
+      newRunner.setConversationMessages([
+        ...this.currentRunner.conversationMessages,
+      ]);
+      this.currentRunner = newRunner;
+      return;
+    }
+
+    if (mode === "react") {
+      // Switching back to react — create a fresh ReActRunner.
+      // The caller (app-factory) should pass agent reference, but for
+      // simplicity we just keep the original runner if already react.
+      // Future iterations: store a ReActRunner factory in config.
       throw new Error(
-        `Mode "${mode}" is not implemented yet. Only "react" is available.`,
+        'Switching back to "react" mode is not supported yet. Start a new session instead.',
       );
     }
-    // Already in react mode — no-op. Future slices will instantiate
-    // PlanExecuteRunner / LoopEngineeringRunner here.
+
+    throw new Error(`Mode "${mode}" is not implemented yet.`);
   }
 
   // ==========================================================================
@@ -135,10 +164,39 @@ export class ConversationCoordinator {
       { role: "user", content: userInput },
     ];
 
+    // Collect plan-execute metadata from stream events.
+    let planRecord: PlanRecord | undefined;
+    const subTaskRecords: SubTaskRecord[] = [];
+
     // Run runner (runner copies input internally — no mutation on our array)
     let result: AgentResult | undefined;
     try {
       for await (const event of this.currentRunner.run(turnInput)) {
+        // Collect plan metadata from events
+        if (event.type === "plan_generated") {
+          planRecord = {
+            tasks: event.plan.tasks.map((t) => ({
+              id: t.id,
+              goal: t.goal,
+              status: t.status,
+              result: t.result,
+            })),
+          };
+        }
+        if (event.type === "task_done") {
+          const task = planRecord?.tasks.find((t) => t.id === event.taskId);
+          subTaskRecords.push({
+            taskId: event.taskId,
+            goal: task?.goal ?? "",
+            status: event.status,
+            result: event.result,
+          });
+          // Update plan record task status
+          if (task) {
+            task.status = event.status;
+            task.result = event.result;
+          }
+        }
         if (event.type === "done") {
           result = event.result;
         }
@@ -195,6 +253,8 @@ export class ConversationCoordinator {
           timestamp: new Date().toISOString(),
           userInput,
           messages: turnMessages,
+          plan: planRecord,
+          subTasks: subTaskRecords.length > 0 ? subTaskRecords : undefined,
         };
         try {
           await this.sessionManager.appendTurn(this._sessionId, turnRecord);

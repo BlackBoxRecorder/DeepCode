@@ -98,9 +98,7 @@ export class CommandRouter {
     this.display.println("  /new        - Start a new session");
     this.display.println("  /sessions   - List session history");
     this.display.println("  /continue <id> - Continue a previous session");
-    this.display.println(
-      "  /mode <react>   - Switch agent loop mode (react only)",
-    );
+    this.display.println("  /mode <react|plan>   - Switch agent loop mode");
     this.display.println("  /tools      - List available tools");
     this.display.println("  /skills     - List available skills");
     this.display.println("  /skill:<name> - Invoke a skill by name");
@@ -198,19 +196,22 @@ export class CommandRouter {
     const parts = cmd.split(/\s+/);
     if (parts.length < 2) {
       this.display.println(`Current mode: ${this.coordinator.currentMode}`);
-      this.display.println("Usage: /mode <react>");
+      this.display.println("Usage: /mode <react|plan>");
       return { type: "handled" };
     }
 
-    const mode = parts[1] as AgentMode;
-    const validModes: AgentMode[] = [
-      "react",
-      "plan-execute",
-      "loop-engineering",
-    ];
-    if (!validModes.includes(mode)) {
+    const rawMode = parts[1];
+    // Map shorthand aliases to full mode names.
+    const modeMap: Record<string, AgentMode> = {
+      react: "react",
+      plan: "plan-execute",
+      "plan-execute": "plan-execute",
+      "loop-engineering": "loop-engineering",
+    };
+    const mode = modeMap[rawMode];
+    if (!mode) {
       this.display.println(
-        `Invalid mode: ${mode}. Valid modes: ${validModes.join(", ")}`,
+        `Invalid mode: ${rawMode}. Valid modes: react, plan`,
       );
       return { type: "handled" };
     }

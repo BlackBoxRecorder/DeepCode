@@ -6,3 +6,4 @@
  */
 export { type AgentMode, type AgentRunner } from "./types.js";
 export { ReActRunner } from "./react-runner.js";
+export { PlanExecuteRunner } from "./plan-execute-runner.js";

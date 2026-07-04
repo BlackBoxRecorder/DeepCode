@@ -37,12 +37,78 @@ export class DisplayRenderer {
   async renderTurn(events: AsyncGenerator<TurnEvent, void>): Promise<void> {
     let hasShownReasoningInRound = false;
     let totalToolCalls = 0;
+    let currentTaskId: string | null = null;
+    let planTaskTotal = 0;
+    let planTaskIndex = 0;
 
     try {
       for await (const event of events) {
         switch (event.type) {
           case "session_created": {
             this.stdout.write(`[Session ${event.sessionId.slice(0, 8)}] `);
+            break;
+          }
+          case "plan_generated": {
+            planTaskTotal = event.plan.tasks.length;
+            this.stdout.write(`\n[Plan] ${planTaskTotal} task(s):\n`);
+            for (const t of event.plan.tasks) {
+              this.stdout.write(`  ${t.id}. ${t.goal}\n`);
+            }
+            this.stdout.write("\n");
+            break;
+          }
+          case "task_start": {
+            currentTaskId = event.taskId;
+            planTaskIndex = event.index;
+            this.stdout.write(
+              `\n[${event.index}/${event.total}] ${event.goal}\n`,
+            );
+            break;
+          }
+          case "task_progress": {
+            // Forward the inner event for rendering
+            const inner = event.event;
+            if (inner.type === "chunk") {
+              const { delta } = inner.chunk;
+              if (delta.reasoning_content) {
+                if (!hasShownReasoningInRound) {
+                  this.stdout.write("  [Thinking...]\n");
+                  hasShownReasoningInRound = true;
+                }
+                this.stdout.write(`  ${delta.reasoning_content}`);
+              }
+              if (delta.content) {
+                if (hasShownReasoningInRound) {
+                  this.stdout.write("\n  --- Answer ---\n");
+                  hasShownReasoningInRound = false;
+                }
+                this.stdout.write(delta.content);
+              }
+            } else if (inner.type === "tool_result") {
+              totalToolCalls++;
+              const status = inner.result.success ? "✓" : "✗";
+              const paramsStr = JSON.stringify(inner.params);
+              this.stdout.write(`\n    ${status} ${inner.tool} ${paramsStr}`);
+              hasShownReasoningInRound = false;
+            }
+            // Don't forward nested done/plan events in task_progress
+            break;
+          }
+          case "task_done": {
+            const marker = event.status === "done" ? "✓" : "✗";
+            this.stdout.write(
+              `\n  ${marker} Task ${event.taskId} ${event.status}`,
+            );
+            if (event.result) {
+              this.stdout.write(` (${event.result.slice(0, 80)})`);
+            }
+            this.stdout.write("\n");
+            break;
+          }
+          case "plan_complete": {
+            if (event.result.content) {
+              this.stdout.write(`\n${event.result.content}\n`);
+            }
             break;
           }
           case "chunk": {

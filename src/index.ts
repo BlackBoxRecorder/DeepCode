@@ -47,6 +47,25 @@ export interface AgentResult {
   allMessages: Message[];
 }
 
+// ============================================================================
+// Plan-Execute Types
+// ============================================================================
+
+/** A single sub-task within a plan. */
+export interface PlanTask {
+  id: string;
+  goal: string;
+  status: "pending" | "running" | "done" | "failed";
+  result?: string;
+}
+
+/** A plan: an ordered list of sub-tasks decomposed from a user request. */
+export interface Plan {
+  tasks: PlanTask[];
+  /** Reserved for future DAG support. */
+  dependencies?: Record<string, string[]>;
+}
+
 /** Events emitted during a streaming agent run */
 export type AgentStreamEvent =
   | { type: "chunk"; chunk: LLMStreamChunk }
@@ -56,7 +75,28 @@ export type AgentStreamEvent =
       params: Record<string, any>;
       result: ToolResult;
     }
-  | { type: "done"; result: AgentResult };
+  | { type: "done"; result: AgentResult }
+  // Plan-Execute events (emitted by PlanExecuteRunner)
+  | { type: "plan_generated"; plan: Plan }
+  | {
+      type: "task_start";
+      taskId: string;
+      goal: string;
+      index: number;
+      total: number;
+    }
+  | {
+      type: "task_progress";
+      taskId: string;
+      event: AgentStreamEvent;
+    }
+  | {
+      type: "task_done";
+      taskId: string;
+      status: "done" | "failed";
+      result?: string;
+    }
+  | { type: "plan_complete"; plan: Plan; result: AgentResult };
 
 /** Log entry for a tool call */
 export interface ToolCallLog {

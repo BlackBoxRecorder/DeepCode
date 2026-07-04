@@ -119,8 +119,10 @@ export async function createApp(): Promise<AppComponents> {
   // ------------------------------------------------------------------
   // Agent + Runner + Coordinator
   // ------------------------------------------------------------------
+  const deepseekClient = new DeepSeekClient({ apiKey });
+
   const agent = new Agent({
-    llm: new DeepSeekClient({ apiKey }),
+    llm: deepseekClient,
     tools: allTools,
     systemPrompt,
   });
@@ -130,6 +132,8 @@ export async function createApp(): Promise<AppComponents> {
   const coordinator = new ConversationCoordinator({
     runner: reactRunner,
     sessionManager: new SessionManager(),
+    llm: deepseekClient,
+    agent: agent,
   });
 
   // ------------------------------------------------------------------

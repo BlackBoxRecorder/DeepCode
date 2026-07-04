@@ -18,12 +18,37 @@ export interface SessionMeta {
 }
 
 /** A single turn record appended as a line after the meta line. */
+export interface PlanTaskRecord {
+  id: string;
+  goal: string;
+  status: "pending" | "running" | "done" | "failed";
+  result?: string;
+}
+
+/** Plan persisted in a TurnRecord for plan-execute mode. */
+export interface PlanRecord {
+  tasks: PlanTaskRecord[];
+}
+
+/** Sub-task execution record persisted in a TurnRecord. */
+export interface SubTaskRecord {
+  taskId: string;
+  goal: string;
+  status: "done" | "failed";
+  result?: string;
+}
+
+/** A single turn record appended as a line after the meta line. */
 export interface TurnRecord {
   type: "turn";
   timestamp: string;
   userInput: string;
   messages: Message[];
   usage?: TokenUsage;
+  /** Plan metadata — present when the turn ran in plan-execute mode. */
+  plan?: PlanRecord;
+  /** Sub-task execution records — present when the turn ran in plan-execute mode. */
+  subTasks?: SubTaskRecord[];
 }
 
 // ============================================================================

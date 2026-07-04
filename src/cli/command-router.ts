@@ -98,7 +98,9 @@ export class CommandRouter {
     this.display.println("  /new        - Start a new session");
     this.display.println("  /sessions   - List session history");
     this.display.println("  /continue <id> - Continue a previous session");
-    this.display.println("  /mode <react>   - Switch agent loop mode (react only)");
+    this.display.println(
+      "  /mode <react>   - Switch agent loop mode (react only)",
+    );
     this.display.println("  /tools      - List available tools");
     this.display.println("  /skills     - List available skills");
     this.display.println("  /skill:<name> - Invoke a skill by name");
@@ -195,15 +197,17 @@ export class CommandRouter {
   private async handleModeCommand(cmd: string): Promise<CommandResult> {
     const parts = cmd.split(/\s+/);
     if (parts.length < 2) {
-      this.display.println(
-        `Current mode: ${this.coordinator.currentMode}`,
-      );
+      this.display.println(`Current mode: ${this.coordinator.currentMode}`);
       this.display.println("Usage: /mode <react>");
       return { type: "handled" };
     }
 
     const mode = parts[1] as AgentMode;
-    const validModes: AgentMode[] = ["react", "plan-execute", "loop-engineering"];
+    const validModes: AgentMode[] = [
+      "react",
+      "plan-execute",
+      "loop-engineering",
+    ];
     if (!validModes.includes(mode)) {
       this.display.println(
         `Invalid mode: ${mode}. Valid modes: ${validModes.join(", ")}`,
@@ -215,9 +219,7 @@ export class CommandRouter {
       this.coordinator.setMode(mode);
       this.display.println(`Switched to mode: ${mode}`);
     } catch (err) {
-      this.display.println(
-        err instanceof Error ? err.message : String(err),
-      );
+      this.display.println(err instanceof Error ? err.message : String(err));
     }
     return { type: "handled" };
   }

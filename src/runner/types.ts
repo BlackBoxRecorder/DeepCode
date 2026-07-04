@@ -37,7 +37,5 @@ export interface AgentRunner {
    * Execute the agent loop with a pre-built message list.
    * Yields streaming events for real-time display.
    */
-  run(
-    inputMessages: Message[],
-  ): AsyncGenerator<AgentStreamEvent, AgentResult>;
+  run(inputMessages: Message[]): AsyncGenerator<AgentStreamEvent, AgentResult>;
 }

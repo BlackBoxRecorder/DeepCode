@@ -30,9 +30,7 @@ export class ReActRunner implements AgentRunner {
     this.agent.setConversationMessages(messages);
   }
 
-  run(
-    inputMessages: Message[],
-  ): AsyncGenerator<AgentStreamEvent, AgentResult> {
+  run(inputMessages: Message[]): AsyncGenerator<AgentStreamEvent, AgentResult> {
     return this.agent.runWithMessages(inputMessages);
   }
 }

@@ -444,7 +444,9 @@ describe("ConversationCoordinator — plan-execute mode", () => {
       sessionManager,
     });
 
-    await expect(coordinator.setMode("plan-execute")).rejects.toThrow("not configured");
+    await expect(coordinator.setMode("plan-execute")).rejects.toThrow(
+      "not configured",
+    );
   });
 
   // ------------------------------------------------------------------

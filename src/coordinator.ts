@@ -100,9 +100,8 @@ export class ConversationCoordinator {
       }
       // Dynamic import to avoid circular dependency at module level
       // LoopEngineeringRunner is imported here lazily.
-      const { LoopEngineeringRunner } = await import(
-        "./runner/loop-engineering-runner.js"
-      );
+      const { LoopEngineeringRunner } =
+        await import("./runner/loop-engineering-runner.js");
       const newRunner = new LoopEngineeringRunner(this.llm, this.agent);
       newRunner.setConversationMessages([
         ...this.currentRunner.conversationMessages,

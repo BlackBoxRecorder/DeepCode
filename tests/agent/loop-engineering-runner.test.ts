@@ -46,15 +46,22 @@ function createMockLLM(behavior: MockBehavior): LLMClient {
   ): AsyncGenerator<LLMStreamChunk> {
     callIndex++;
 
-    const systemContent = messages.find((m) => m.role === "system")?.content ?? "";
+    const systemContent =
+      messages.find((m) => m.role === "system")?.content ?? "";
     const userContent = messages.find((m) => m.role === "user")?.content ?? "";
 
     let responseContent: string;
 
-    if (systemContent.includes("task planner") || systemContent.includes("You are a task planner")) {
+    if (
+      systemContent.includes("task planner") ||
+      systemContent.includes("You are a task planner")
+    ) {
       // Planner call
       responseContent = behavior.planJson;
-    } else if (systemContent.includes("verification evaluator") || systemContent.includes("verification")) {
+    } else if (
+      systemContent.includes("verification evaluator") ||
+      systemContent.includes("verification")
+    ) {
       // Verifier call
       const idx = verifierCallIndex % behavior.verifierResponses.length;
       responseContent = behavior.verifierResponses[idx];
@@ -81,8 +88,12 @@ function createMockLLM(behavior: MockBehavior): LLMClient {
       _options?: Record<string, unknown>,
     ): Promise<LLMResponse> => {
       // For verifier calls (chat, not stream)
-      const systemContent = messages.find((m) => m.role === "system")?.content ?? "";
-      if (systemContent.includes("verification evaluator") || systemContent.includes("verification")) {
+      const systemContent =
+        messages.find((m) => m.role === "system")?.content ?? "";
+      if (
+        systemContent.includes("verification evaluator") ||
+        systemContent.includes("verification")
+      ) {
         const idx = verifierCallIndex % behavior.verifierResponses.length;
         verifierCallIndex++;
         return {
@@ -261,10 +272,26 @@ describe("LoopEngineeringRunner", () => {
       }),
       agentResponse: "Attempted the task.",
       verifierResponses: [
-        JSON.stringify({ passed: false, reason: "Not good enough — attempt 1.", suggestion: "Try approach A." }),
-        JSON.stringify({ passed: false, reason: "Still failing — attempt 2.", suggestion: "Try approach B." }),
-        JSON.stringify({ passed: false, reason: "Nope — attempt 3.", suggestion: "Try approach C." }),
-        JSON.stringify({ passed: false, reason: "Last try failed — attempt 4.", suggestion: "Give up." }),
+        JSON.stringify({
+          passed: false,
+          reason: "Not good enough — attempt 1.",
+          suggestion: "Try approach A.",
+        }),
+        JSON.stringify({
+          passed: false,
+          reason: "Still failing — attempt 2.",
+          suggestion: "Try approach B.",
+        }),
+        JSON.stringify({
+          passed: false,
+          reason: "Nope — attempt 3.",
+          suggestion: "Try approach C.",
+        }),
+        JSON.stringify({
+          passed: false,
+          reason: "Last try failed — attempt 4.",
+          suggestion: "Give up.",
+        }),
       ],
     });
 
@@ -389,7 +416,11 @@ describe("LoopEngineeringRunner", () => {
       }),
       agentResponse: "Task done.",
       verifierResponses: [
-        JSON.stringify({ passed: false, reason: "Nope.", suggestion: "Try X." }),
+        JSON.stringify({
+          passed: false,
+          reason: "Nope.",
+          suggestion: "Try X.",
+        }),
         JSON.stringify({ passed: true, reason: "Yes!" }),
       ],
     });

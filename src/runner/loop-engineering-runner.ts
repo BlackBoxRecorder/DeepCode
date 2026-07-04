@@ -11,13 +11,12 @@
  */
 import type { Message, LLMClient } from "../llm/index.js";
 import type { Agent } from "../index.js";
-import type {
-  AgentStreamEvent,
-  AgentResult,
-  Plan,
-} from "../index.js";
+import type { AgentStreamEvent, AgentResult, Plan } from "../index.js";
 import type { AgentMode, AgentRunner } from "./types.js";
-import { PlanExecuteRunner, stripMarkdownCodeFences } from "./plan-execute-runner.js";
+import {
+  PlanExecuteRunner,
+  stripMarkdownCodeFences,
+} from "./plan-execute-runner.js";
 
 // ============================================================================
 // Verifier Interface & Implementation
@@ -332,7 +331,9 @@ export class LoopEngineeringRunner implements AgentRunner {
 
       // No-progress detection
       if (previousVerificationResult) {
-        if (areVerificationsIdentical(verification, previousVerificationResult)) {
+        if (
+          areVerificationsIdentical(verification, previousVerificationResult)
+        ) {
           noProgress = true;
           yield {
             type: "loop_retry",

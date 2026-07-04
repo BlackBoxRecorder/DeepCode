@@ -98,7 +98,9 @@ export class CommandRouter {
     this.display.println("  /new        - Start a new session");
     this.display.println("  /sessions   - List session history");
     this.display.println("  /continue <id> - Continue a previous session");
-    this.display.println("  /mode <react|plan|loop>   - Switch agent loop mode");
+    this.display.println(
+      "  /mode <react|plan|loop>   - Switch agent loop mode",
+    );
     this.display.println("  /tools      - List available tools");
     this.display.println("  /skills     - List available skills");
     this.display.println("  /skill:<name> - Invoke a skill by name");

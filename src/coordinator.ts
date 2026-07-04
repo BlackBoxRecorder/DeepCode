@@ -26,7 +26,13 @@ export type TurnEvent =
   | AgentStreamEvent
   | { type: "session_created"; sessionId: string; title: string }
   | { type: "save_error"; error: string }
-  | { type: "agent_error"; error: string };
+  | { type: "agent_error"; error: string }
+  | {
+      type: "upgrade_notice";
+      from: AgentMode;
+      to: AgentMode;
+      reason: string;
+    };
 
 /** Configuration for ConversationCoordinator. */
 export interface CoordinatorConfig {
@@ -37,6 +43,24 @@ export interface CoordinatorConfig {
   /** Agent — required for Plan-Execute mode switching. */
   agent?: Agent;
 }
+
+/**
+ * Result of running a turn through a runner.
+ * - "normal": the runner completed normally.
+ * - "upgrade": the runner requested an upgrade to another mode.
+ */
+type RunCollectResult =
+  | {
+      type: "normal";
+      result: AgentResult | undefined;
+      planRecord: PlanRecord | undefined;
+      subTaskRecords: SubTaskRecord[];
+      verificationRecords: VerificationRecord[];
+    }
+  | {
+      type: "upgrade";
+      reason: string;
+    };
 
 // ============================================================================
 // Coordinator
@@ -183,16 +207,126 @@ export class ConversationCoordinator {
       { role: "user", content: userInput },
     ];
 
-    // Collect plan-execute metadata from stream events.
+    // Execute the turn, handling potential auto-upgrade.
+    const execResult = yield* this._runAndCollect(turnInput, userInput);
+
+    if (execResult.type === "upgrade") {
+      // Auto-upgrade triggered: switch to plan-execute and re-execute.
+      yield {
+        type: "upgrade_notice",
+        from: "react",
+        to: "plan-execute",
+        reason: execResult.reason,
+      };
+
+      await this.setMode("plan-execute");
+
+      // Build fresh turn input for new runner (it has its own conversation
+      // state seeded from the previous runner).
+      const newTurnInput: Message[] = [
+        ...this.currentRunner.conversationMessages,
+        { role: "user", content: userInput },
+      ];
+
+      const reExecResult = yield* this._runAndCollect(newTurnInput, userInput);
+
+      // Persist the re-executed turn (only if it completed normally).
+      if (
+        reExecResult.type === "normal" &&
+        this._sessionId &&
+        reExecResult.result
+      ) {
+        const reMessagesBefore = messagesBefore; // new runner starts fresh
+        const turnMessages =
+          reExecResult.result.allMessages.slice(reMessagesBefore);
+        if (turnMessages.length > 0) {
+          const turnRecord: TurnRecord = {
+            type: "turn",
+            timestamp: new Date().toISOString(),
+            userInput,
+            messages: turnMessages,
+            plan: reExecResult.planRecord,
+            subTasks:
+              reExecResult.subTaskRecords.length > 0
+                ? reExecResult.subTaskRecords
+                : undefined,
+            verifications:
+              reExecResult.verificationRecords.length > 0
+                ? reExecResult.verificationRecords
+                : undefined,
+          };
+          try {
+            await this.sessionManager.appendTurn(this._sessionId, turnRecord);
+          } catch (err) {
+            yield {
+              type: "save_error",
+              error: err instanceof Error ? err.message : String(err),
+            };
+          }
+        }
+      }
+      return;
+    }
+
+    // Normal execution: persist the turn.
+    if (this._sessionId && execResult.result) {
+      const turnMessages = execResult.result.allMessages.slice(messagesBefore);
+      if (turnMessages.length > 0) {
+        const turnRecord: TurnRecord = {
+          type: "turn",
+          timestamp: new Date().toISOString(),
+          userInput,
+          messages: turnMessages,
+          plan: execResult.planRecord,
+          subTasks:
+            execResult.subTaskRecords.length > 0
+              ? execResult.subTaskRecords
+              : undefined,
+          verifications:
+            execResult.verificationRecords.length > 0
+              ? execResult.verificationRecords
+              : undefined,
+        };
+        try {
+          await this.sessionManager.appendTurn(this._sessionId, turnRecord);
+        } catch (err) {
+          yield {
+            type: "save_error",
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }
+    }
+  }
+
+  // ==========================================================================
+  // Internal helpers
+  // ==========================================================================
+
+  /**
+   * Run the current runner with the given input, collecting plan metadata
+   * and yielding all events. Returns a structured result describing whether
+   * the turn completed normally or requested an auto-upgrade.
+   */
+  private async *_runAndCollect(
+    turnInput: Message[],
+    userInput: string,
+  ): AsyncGenerator<TurnEvent, RunCollectResult> {
     let planRecord: PlanRecord | undefined;
     const subTaskRecords: SubTaskRecord[] = [];
     const verificationRecords: VerificationRecord[] = [];
-
-    // Run runner (runner copies input internally — no mutation on our array)
     let result: AgentResult | undefined;
+
     try {
       for await (const event of this.currentRunner.run(turnInput)) {
-        // Collect plan metadata from events
+        // Check for auto-upgrade signal.
+        if (event.type === "upgrade_requested") {
+          // Don't yield the upgrade_requested or inner done — caller
+          // will emit upgrade_notice and re-execute.
+          return { type: "upgrade", reason: event.reason };
+        }
+
+        // Collect plan metadata from events.
         if (event.type === "plan_generated") {
           planRecord = {
             tasks: event.plan.tasks.map((t) => ({
@@ -211,7 +345,6 @@ export class ConversationCoordinator {
             status: event.status,
             result: event.result,
           });
-          // Update plan record task status
           if (task) {
             task.status = event.status;
             task.result = event.result;
@@ -243,7 +376,7 @@ export class ConversationCoordinator {
           timestamp: new Date().toISOString(),
           userInput,
           messages: [
-            ...turnInput.slice(messagesBefore),
+            ...turnInput.slice(this.currentRunner.conversationMessages.length),
             {
               role: "assistant",
               content: `Agent error: ${errorMsg}`,
@@ -260,42 +393,28 @@ export class ConversationCoordinator {
         }
       }
 
-      // Restore message history to before the failed turn so the next
-      // turn starts from a clean state.
+      // Restore message history to before the failed turn.
+      const messagesBefore = this.currentRunner.conversationMessages.length;
       this.currentRunner.setConversationMessages(
         this.currentRunner.conversationMessages.slice(0, messagesBefore),
       );
 
       yield { type: "agent_error", error: errorMsg };
-      return;
+      return {
+        type: "normal",
+        result: undefined,
+        planRecord: undefined,
+        subTaskRecords: [],
+        verificationRecords: [],
+      };
     }
 
-    // Runner updates its internal state automatically in run().
-    // No need to manually sync — conversationMessages is already up to date.
-
-    // Persist the turn
-    if (this._sessionId && result) {
-      const turnMessages = result.allMessages.slice(messagesBefore);
-      if (turnMessages.length > 0) {
-        const turnRecord: TurnRecord = {
-          type: "turn",
-          timestamp: new Date().toISOString(),
-          userInput,
-          messages: turnMessages,
-          plan: planRecord,
-          subTasks: subTaskRecords.length > 0 ? subTaskRecords : undefined,
-          verifications:
-            verificationRecords.length > 0 ? verificationRecords : undefined,
-        };
-        try {
-          await this.sessionManager.appendTurn(this._sessionId, turnRecord);
-        } catch (err) {
-          yield {
-            type: "save_error",
-            error: err instanceof Error ? err.message : String(err),
-          };
-        }
-      }
-    }
+    return {
+      type: "normal",
+      result,
+      planRecord,
+      subTaskRecords,
+      verificationRecords,
+    };
   }
 }

@@ -15,6 +15,7 @@ import type {
   Message,
 } from "../../src/llm/index.js";
 import type { Tool, ToolResult } from "../../src/tool-interface/index.js";
+import type { AgentStreamEvent } from "../../src/index.js";
 
 // ============================================================================
 // Mock LLM Client — returns a tool call response, then a final text response
@@ -90,6 +91,59 @@ function createThrowingMockLLM(errorMsg: string): LLMClient {
     chat: async () => {
       throw new Error(errorMsg);
     },
+    chatStream,
+  };
+}
+
+/**
+ * Creates a mock LLM client whose first response contains the
+ * [UPGRADE_TO_PLAN] marker, triggering an auto-upgrade signal.
+ */
+function createMockLLMWithUpgradeSignal(): LLMClient {
+  async function* chatStream(): AsyncGenerator<LLMStreamChunk> {
+    yield {
+      delta: {},
+      finish_reason: "stop",
+      accumulated: {
+        content:
+          "[UPGRADE_TO_PLAN] This task requires multiple steps and would benefit from planning.",
+        tool_calls: undefined,
+        finish_reason: "stop",
+      },
+    };
+  }
+
+  return {
+    chat: async () => ({
+      content: "[UPGRADE_TO_PLAN] This task requires multiple steps.",
+      finish_reason: "stop",
+    }),
+    chatStream,
+  };
+}
+
+/**
+ * Creates a mock LLM client that responds with a simple text message
+ * (no upgrade signal).
+ */
+function createMockLLMWithTextResponse(content: string): LLMClient {
+  async function* chatStream(): AsyncGenerator<LLMStreamChunk> {
+    yield {
+      delta: {},
+      finish_reason: "stop",
+      accumulated: {
+        content,
+        tool_calls: undefined,
+        finish_reason: "stop",
+      },
+    };
+  }
+
+  return {
+    chat: async () => ({
+      content,
+      finish_reason: "stop",
+    }),
     chatStream,
   };
 }
@@ -296,5 +350,151 @@ describe("ConversationCoordinator", () => {
     expect(hasError).toBe(false);
 
     await assertNoOrphanedMeta(tmpDir, sessionManager);
+  });
+
+  // ====================================================================
+  // Auto-upgrade: ReAct → Plan-Execute
+  // ====================================================================
+
+  it("ReActRunner should emit upgrade_requested when LLM returns [UPGRADE_TO_PLAN]", async () => {
+    const mockLLM = createMockLLMWithUpgradeSignal();
+
+    const agent = new Agent({
+      llm: mockLLM,
+      tools: [],
+    });
+
+    const runner = new ReActRunner(agent);
+
+    const messages: Message[] = [
+      { role: "system", content: "You are a helpful assistant." },
+      { role: "user", content: "Build a full-stack app with auth." },
+    ];
+
+    const events: AgentStreamEvent[] = [];
+    for await (const event of runner.run(messages)) {
+      events.push(event);
+    }
+
+    // Should contain upgrade_requested
+    const upgradeEvent = events.find((e) => e.type === "upgrade_requested");
+    expect(upgradeEvent).toBeDefined();
+    expect(upgradeEvent!.type).toBe("upgrade_requested");
+
+    // Should contain done after upgrade
+    const doneEvent = events.find((e) => e.type === "done");
+    expect(doneEvent).toBeDefined();
+  });
+
+  it("ReActRunner should NOT emit upgrade_requested for simple queries", async () => {
+    const mockLLM = createMockLLMWithTextResponse(
+      "TypeScript is a typed superset of JavaScript developed by Microsoft.",
+    );
+
+    const agent = new Agent({
+      llm: mockLLM,
+      tools: [],
+    });
+
+    const runner = new ReActRunner(agent);
+
+    const messages: Message[] = [
+      { role: "system", content: "You are a helpful assistant." },
+      { role: "user", content: "What is TypeScript?" },
+    ];
+
+    const events: AgentStreamEvent[] = [];
+    for await (const event of runner.run(messages)) {
+      events.push(event);
+    }
+
+    // Should NOT contain upgrade_requested
+    const upgradeEvent = events.find((e) => e.type === "upgrade_requested");
+    expect(upgradeEvent).toBeUndefined();
+
+    // Should contain a normal done event
+    const doneEvent = events.find((e) => e.type === "done");
+    expect(doneEvent).toBeDefined();
+  });
+
+  it("Coordinator should emit upgrade_notice and switch runner when upgrade is detected", async () => {
+    // The ReAct LLM returns upgrade signal
+    const reactLLM = createMockLLMWithUpgradeSignal();
+
+    // The Plan-Execute planner LLM returns a plan
+    const plannerLLM = createMockLLMWithTextResponse(
+      JSON.stringify({
+        tasks: [
+          { id: "1", goal: "Create the project structure" },
+          { id: "2", goal: "Implement authentication" },
+        ],
+      }),
+    );
+
+    const agent = new Agent({
+      llm: reactLLM,
+      tools: [],
+    });
+
+    const runner = new ReActRunner(agent);
+
+    const coordinator = new ConversationCoordinator({
+      runner,
+      sessionManager,
+      llm: plannerLLM,
+      agent,
+    });
+
+    const events = await consumeTurn(
+      coordinator,
+      "Build a full-stack app with auth.",
+    );
+
+    // Should have upgrade_notice
+    const upgradeNotice = events.find((e: any) => e.type === "upgrade_notice");
+    expect(upgradeNotice).toBeDefined();
+    expect(upgradeNotice!.from).toBe("react");
+    expect(upgradeNotice!.to).toBe("plan-execute");
+
+    // Should eventually complete with done
+    const doneEvent = events.find((e: any) => e.type === "done");
+    expect(doneEvent).toBeDefined();
+
+    // Coordinator should now be in plan-execute mode
+    expect(coordinator.currentMode).toBe("plan-execute");
+
+    await assertNoOrphanedMeta(tmpDir, sessionManager);
+  });
+
+  it("should NOT auto-upgrade when already in plan-execute mode", async () => {
+    // Create coordinator in plan-execute mode
+    const mockLLM = createMockLLMWithTextResponse("Task completed.");
+
+    const agent = new Agent({
+      llm: mockLLM,
+      tools: [],
+    });
+
+    const runner = new ReActRunner(agent);
+
+    const coordinator = new ConversationCoordinator({
+      runner,
+      sessionManager,
+      llm: mockLLM,
+      agent,
+    });
+
+    // Switch to plan-execute first
+    await coordinator.setMode("plan-execute");
+
+    // The plan-execute runner should NOT trigger another upgrade
+    const events = await consumeTurn(
+      coordinator,
+      "Build a full-stack app with auth.",
+    );
+
+    // No upgrade_notice should be present
+    const upgradeNotice = events.find((e: any) => e.type === "upgrade_notice");
+    expect(upgradeNotice).toBeUndefined();
   });
 });

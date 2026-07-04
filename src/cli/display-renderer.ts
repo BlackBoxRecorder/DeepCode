@@ -173,6 +173,10 @@ export class DisplayRenderer {
             this.stderr.write(`\n[Agent error: ${event.error}]\n`);
             break;
           }
+          case "upgrade_notice": {
+            this.stdout.write(`\n[${event.reason}]\n`);
+            break;
+          }
         }
       }
       this.stdout.write("\n");

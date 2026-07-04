@@ -111,6 +111,12 @@ export type AgentStreamEvent =
       maxAttempts: number;
       reason: string;
       suggestion?: string;
+    }
+  // Auto-upgrade event (ReAct → Plan-Execute)
+  | {
+      type: "upgrade_requested";
+      userInput: string;
+      reason: string;
     };
 
 // ============================================================================

@@ -1,11 +1,12 @@
 /**
  * ConversationCoordinator — manages session lifecycle and turn execution.
  *
- * Sits between CLI (display) and Agent + SessionManager (logic + persistence).
+ * Sits between CLI (display) and AgentRunner + SessionManager (logic + persistence).
  * Owns conversation state so display adapters (CLI, future TUI) don't need to.
  */
 import type { Message } from "./llm/index.js";
-import { Agent, type AgentStreamEvent, type AgentResult } from "./index.js";
+import type { AgentStreamEvent, AgentResult } from "./index.js";
+import type { AgentRunner, AgentMode } from "./runner/index.js";
 import {
   SessionManager,
   type SessionMeta,
@@ -25,7 +26,7 @@ export type TurnEvent =
 
 /** Configuration for ConversationCoordinator. */
 export interface CoordinatorConfig {
-  agent: Agent;
+  runner: AgentRunner;
   sessionManager: SessionManager;
 }
 
@@ -34,12 +35,12 @@ export interface CoordinatorConfig {
 // ============================================================================
 
 export class ConversationCoordinator {
-  private agent: Agent;
+  private currentRunner: AgentRunner;
   private sessionManager: SessionManager;
   private _sessionId: string | null = null;
 
   constructor(config: CoordinatorConfig) {
-    this.agent = config.agent;
+    this.currentRunner = config.runner;
     this.sessionManager = config.sessionManager;
   }
 
@@ -47,8 +48,31 @@ export class ConversationCoordinator {
   // Read-only state (for display adapters)
   // ==========================================================================
 
+  get currentMode(): AgentMode {
+    return this.currentRunner.mode;
+  }
+
   get currentSessionId(): string | null {
     return this._sessionId;
+  }
+
+  // ==========================================================================
+  // Mode switching
+  // ==========================================================================
+
+  /**
+   * Switch the Agent Loop mode.
+   * Initially only "react" is implemented; other modes will be added in
+   * future slices.
+   */
+  setMode(mode: AgentMode): void {
+    if (mode !== "react") {
+      throw new Error(
+        `Mode "${mode}" is not implemented yet. Only "react" is available.`,
+      );
+    }
+    // Already in react mode — no-op. Future slices will instantiate
+    // PlanExecuteRunner / LoopEngineeringRunner here.
   }
 
   // ==========================================================================
@@ -58,7 +82,7 @@ export class ConversationCoordinator {
   /** Discard current session and start fresh. */
   newSession(): void {
     this._sessionId = null;
-    this.agent.setConversationMessages([]);
+    this.currentRunner.setConversationMessages([]);
   }
 
   /** List all persisted sessions, most recent first. */
@@ -74,8 +98,8 @@ export class ConversationCoordinator {
     }
     const loaded = await this.sessionManager.loadMessages(sessionId);
     this._sessionId = sessionId;
-    this.agent.setConversationMessages([
-      { role: "system", content: this.agent.systemPromptText },
+    this.currentRunner.setConversationMessages([
+      { role: "system", content: this.currentRunner.systemPromptText },
       ...loaded,
     ]);
     return meta;
@@ -86,7 +110,7 @@ export class ConversationCoordinator {
   // ==========================================================================
 
   /**
-   * Execute one user-input turn through the Agent, saving the result.
+   * Execute one user-input turn through the current runner, saving the result.
    * Yields streaming events for real-time display.
    */
   async *executeTurn(userInput: string): AsyncGenerator<TurnEvent, void> {
@@ -94,8 +118,8 @@ export class ConversationCoordinator {
     if (this._sessionId === null) {
       const meta = await this.sessionManager.createSession(userInput);
       this._sessionId = meta.id;
-      this.agent.setConversationMessages([
-        { role: "system", content: this.agent.systemPromptText },
+      this.currentRunner.setConversationMessages([
+        { role: "system", content: this.currentRunner.systemPromptText },
       ]);
       yield {
         type: "session_created",
@@ -104,17 +128,17 @@ export class ConversationCoordinator {
       };
     }
 
-    // Build turn input from agent's current conversation state.
-    const messagesBefore = this.agent.conversationMessages.length;
+    // Build turn input from runner's current conversation state.
+    const messagesBefore = this.currentRunner.conversationMessages.length;
     const turnInput: Message[] = [
-      ...this.agent.conversationMessages,
+      ...this.currentRunner.conversationMessages,
       { role: "user", content: userInput },
     ];
 
-    // Run Agent (Agent copies input internally — no mutation on our array)
+    // Run runner (runner copies input internally — no mutation on our array)
     let result: AgentResult | undefined;
     try {
-      for await (const event of this.agent.runWithMessages(turnInput)) {
+      for await (const event of this.currentRunner.run(turnInput)) {
         if (event.type === "done") {
           result = event.result;
         }
@@ -151,15 +175,15 @@ export class ConversationCoordinator {
 
       // Restore message history to before the failed turn so the next
       // turn starts from a clean state.
-      this.agent.setConversationMessages(
-        this.agent.conversationMessages.slice(0, messagesBefore),
+      this.currentRunner.setConversationMessages(
+        this.currentRunner.conversationMessages.slice(0, messagesBefore),
       );
 
       yield { type: "agent_error", error: errorMsg };
       return;
     }
 
-    // Agent updates its internal state automatically in runWithMessages.
+    // Runner updates its internal state automatically in run().
     // No need to manually sync — conversationMessages is already up to date.
 
     // Persist the turn

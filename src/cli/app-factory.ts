@@ -5,6 +5,7 @@
  * and the component wiring is explicit and testable.
  */
 import { Agent } from "../index.js";
+import { ReActRunner } from "../runner/index.js";
 import { SessionManager } from "../session.js";
 import { ConversationCoordinator } from "../coordinator.js";
 import { DeepSeekClient } from "../llm/index.js";
@@ -116,7 +117,7 @@ export async function createApp(): Promise<AppComponents> {
   }
 
   // ------------------------------------------------------------------
-  // Agent + Coordinator
+  // Agent + Runner + Coordinator
   // ------------------------------------------------------------------
   const agent = new Agent({
     llm: new DeepSeekClient({ apiKey }),
@@ -124,8 +125,10 @@ export async function createApp(): Promise<AppComponents> {
     systemPrompt,
   });
 
+  const reactRunner = new ReActRunner(agent);
+
   const coordinator = new ConversationCoordinator({
-    agent,
+    runner: reactRunner,
     sessionManager: new SessionManager(),
   });
 

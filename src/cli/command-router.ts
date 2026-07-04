@@ -9,6 +9,7 @@ import type { Tool } from "../tool-interface/index.js";
 import type { ConversationCoordinator } from "../coordinator.js";
 import type { SkillManager } from "../skills.js";
 import type { ServerStatus } from "../mcp/index.js";
+import type { AgentMode } from "../runner/index.js";
 import { DisplayRenderer } from "./display-renderer.js";
 
 // ============================================================================
@@ -75,6 +76,9 @@ export class CommandRouter {
         await this.handleSessions();
         return { type: "handled" };
       default:
+        if (cmd.startsWith("/mode")) {
+          return this.handleModeCommand(cmd);
+        }
         if (cmd.startsWith("/skill:")) {
           return this.handleSkillCommand(cmd);
         }
@@ -94,6 +98,7 @@ export class CommandRouter {
     this.display.println("  /new        - Start a new session");
     this.display.println("  /sessions   - List session history");
     this.display.println("  /continue <id> - Continue a previous session");
+    this.display.println("  /mode <react>   - Switch agent loop mode (react only)");
     this.display.println("  /tools      - List available tools");
     this.display.println("  /skills     - List available skills");
     this.display.println("  /skill:<name> - Invoke a skill by name");
@@ -185,6 +190,36 @@ export class CommandRouter {
   private handleNew(): void {
     this.coordinator.newSession();
     this.display.println("New session started.");
+  }
+
+  private async handleModeCommand(cmd: string): Promise<CommandResult> {
+    const parts = cmd.split(/\s+/);
+    if (parts.length < 2) {
+      this.display.println(
+        `Current mode: ${this.coordinator.currentMode}`,
+      );
+      this.display.println("Usage: /mode <react>");
+      return { type: "handled" };
+    }
+
+    const mode = parts[1] as AgentMode;
+    const validModes: AgentMode[] = ["react", "plan-execute", "loop-engineering"];
+    if (!validModes.includes(mode)) {
+      this.display.println(
+        `Invalid mode: ${mode}. Valid modes: ${validModes.join(", ")}`,
+      );
+      return { type: "handled" };
+    }
+
+    try {
+      this.coordinator.setMode(mode);
+      this.display.println(`Switched to mode: ${mode}`);
+    } catch (err) {
+      this.display.println(
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    return { type: "handled" };
   }
 
   private async handleSkillCommand(cmd: string): Promise<CommandResult> {

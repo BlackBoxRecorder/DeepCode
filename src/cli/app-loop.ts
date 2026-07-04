@@ -35,7 +35,7 @@ export class AppLoop {
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
-      prompt: "> ",
+      prompt: `[${this.coordinator.currentMode}] > `,
     });
 
     rl.prompt();
@@ -71,6 +71,7 @@ export class AppLoop {
           `Command error: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
+      rl.setPrompt(`[${this.coordinator.currentMode}] > `);
       rl.prompt();
     });
 

@@ -6,6 +6,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Agent } from "../../src/index.js";
+import { ReActRunner } from "../../src/runner/index.js";
 import { SessionManager } from "../../src/session.js";
 import { ConversationCoordinator } from "../../src/coordinator.js";
 import type {
@@ -191,8 +192,10 @@ describe("ConversationCoordinator", () => {
       tools: [throwingTool],
     });
 
+    const runner = new ReActRunner(agent);
+
     const coordinator = new ConversationCoordinator({
-      agent,
+      runner,
       sessionManager,
     });
 
@@ -226,8 +229,10 @@ describe("ConversationCoordinator", () => {
       tools: [],
     });
 
+    const runner = new ReActRunner(agent);
+
     const coordinator = new ConversationCoordinator({
-      agent,
+      runner,
       sessionManager,
     });
 
@@ -278,8 +283,10 @@ describe("ConversationCoordinator", () => {
       tools: [normalTool],
     });
 
+    const runner = new ReActRunner(agent);
+
     const coordinator = new ConversationCoordinator({
-      agent,
+      runner,
       sessionManager,
     });
 

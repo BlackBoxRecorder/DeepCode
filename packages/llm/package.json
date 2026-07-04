@@ -10,7 +10,11 @@
     ],
     "scripts": {
         "build": "tsc",
-        "clean": "rm -rf dist"
+        "clean": "rm -rf dist",
+        "verify:chat": "npx tsx scripts/chat.ts",
+        "verify:chat-stream": "npx tsx scripts/chat-stream.ts",
+        "verify:chat-tools": "npx tsx scripts/chat-tools.ts",
+        "verify:chat-thinking": "npx tsx scripts/chat-thinking.ts"
     },
     "keywords": [
         "deepseek",
@@ -21,6 +25,7 @@
     "license": "MIT",
     "devDependencies": {
         "@types/node": "^20.0.0",
+        "tsx": "^4.0.0",
         "typescript": "^5.8.3"
     }
 }

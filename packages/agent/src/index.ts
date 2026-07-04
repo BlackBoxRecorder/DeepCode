@@ -7,7 +7,12 @@
  * 3. If LLM returns stop → return final response
  * 4. Repeat until max iterations
  */
-import type { LLMClient, Message } from "@timetickme/llm";
+import type {
+  LLMClient,
+  LLMResponse,
+  LLMStreamChunk,
+  Message,
+} from "@timetickme/llm";
 import {
   DefaultToolRegistry,
   type Tool,
@@ -39,6 +44,17 @@ export interface AgentResult {
   iterations: number;
 }
 
+/** Events emitted during a streaming agent run */
+export type AgentStreamEvent =
+  | { type: "chunk"; chunk: LLMStreamChunk }
+  | {
+      type: "tool_result";
+      tool: string;
+      params: Record<string, any>;
+      result: ToolResult;
+    }
+  | { type: "done"; result: AgentResult };
+
 /** Log entry for a tool call */
 export interface ToolCallLog {
   tool: string;
@@ -64,7 +80,7 @@ export class Agent {
   constructor(config: AgentConfig) {
     this.llm = config.llm;
     this.systemPrompt = config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
-    this.maxIterations = config.maxIterations ?? 10;
+    this.maxIterations = config.maxIterations ?? 100;
 
     this.registry = new DefaultToolRegistry();
     for (const tool of config.tools) {
@@ -72,53 +88,73 @@ export class Agent {
     }
   }
 
-  /**
-   * Run the agent on a user input.
-   */
-  async run(userInput: string): Promise<AgentResult> {
-    const messages: Message[] = [
-      { role: "system", content: this.systemPrompt },
-      { role: "user", content: userInput },
-    ];
+  /** Expose the system prompt so callers can build message lists. */
+  get systemPromptText(): string {
+    return this.systemPrompt;
+  }
 
+  /**
+   * Run the agent with a pre-built message list (for session continuation).
+   * The caller is responsible for including system + user messages.
+   * Yields streaming events for real-time display.
+   */
+  async *runWithMessages(
+    messages: Message[],
+  ): AsyncGenerator<AgentStreamEvent, AgentResult> {
     const toolCallsLog: ToolCallLog[] = [];
     let iterations = 0;
 
     while (iterations < this.maxIterations) {
       iterations++;
 
-      // 1. Call LLM
-      const response = await this.llm.chat(
+      // 1. Call LLM with streaming
+      let accumulatedResponse: LLMResponse | undefined;
+      for await (const chunk of this.llm.chatStream(
         messages,
         this.registry.getToolsForLLM(),
         { tool_choice: "auto" },
-      );
+      )) {
+        yield { type: "chunk", chunk };
+        if (chunk.accumulated) {
+          accumulatedResponse = chunk.accumulated;
+        }
+      }
 
-      // 2. If no tool calls, return final result
-      if (!response.tool_calls || response.tool_calls.length === 0) {
-        return {
-          success: true,
-          content: response.content ?? "",
+      if (!accumulatedResponse) {
+        const result: AgentResult = {
+          success: false,
+          content: "No response from LLM",
           toolCalls: toolCallsLog,
           iterations,
         };
+        yield { type: "done", result };
+        return result;
+      }
+
+      // 2. If no tool calls, return final result
+      if (
+        !accumulatedResponse.tool_calls ||
+        accumulatedResponse.tool_calls.length === 0
+      ) {
+        const result: AgentResult = {
+          success: true,
+          content: accumulatedResponse.content ?? "",
+          toolCalls: toolCallsLog,
+          iterations,
+        };
+        yield { type: "done", result };
+        return result;
       }
 
       // 3. Execute tool calls
-      const assistantMessage: Message = response.content
-        ? {
-            role: "assistant",
-            content: response.content,
-            tool_calls: response.tool_calls,
-          }
-        : {
-            role: "assistant",
-            content: "",
-            tool_calls: response.tool_calls,
-          };
+      const assistantMessage = {
+        role: "assistant" as const,
+        content: accumulatedResponse.content,
+        tool_calls: accumulatedResponse.tool_calls,
+      } as Message;
       messages.push(assistantMessage);
 
-      for (const toolCall of response.tool_calls) {
+      for (const toolCall of accumulatedResponse.tool_calls) {
         const toolName = toolCall.function.name;
         const tool = this.registry.getTool(toolName);
 
@@ -133,6 +169,12 @@ export class Agent {
             params: {},
             result: errorResult,
           });
+          yield {
+            type: "tool_result",
+            tool: toolName,
+            params: {},
+            result: errorResult,
+          };
           messages.push({
             role: "tool",
             tool_call_id: toolCall.id,
@@ -156,6 +198,12 @@ export class Agent {
             params: {},
             result: parseError,
           });
+          yield {
+            type: "tool_result",
+            tool: toolName,
+            params: {},
+            result: parseError,
+          };
           messages.push({
             role: "tool",
             tool_call_id: toolCall.id,
@@ -166,6 +214,7 @@ export class Agent {
 
         const result = await tool.execute(params);
         toolCallsLog.push({ tool: toolName, params, result });
+        yield { type: "tool_result", tool: toolName, params, result };
 
         messages.push({
           role: "tool",
@@ -176,11 +225,25 @@ export class Agent {
     }
 
     // Reached max iterations
-    return {
+    const result: AgentResult = {
       success: false,
       content: "Maximum ReAct iterations reached without a final response.",
       toolCalls: toolCallsLog,
       iterations,
     };
+    yield { type: "done", result };
+    return result;
+  }
+
+  /**
+   * Run the agent on a single user input (convenience method).
+   * Builds [system, user] messages and delegates to runWithMessages().
+   */
+  async *run(userInput: string): AsyncGenerator<AgentStreamEvent, AgentResult> {
+    const messages: Message[] = [
+      { role: "system", content: this.systemPrompt },
+      { role: "user", content: userInput },
+    ];
+    return yield* this.runWithMessages(messages);
   }
 }

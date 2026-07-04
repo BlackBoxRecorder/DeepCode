@@ -10,8 +10,8 @@
  * 6. No-progress detection: if two consecutive verifications are identical, terminate early
  */
 import type { Message, LLMClient } from "../llm/index.js";
-import type { Agent } from "../index.js";
-import type { AgentStreamEvent, AgentResult, Plan } from "../index.js";
+import type { Agent, AgentResult } from "../index.js";
+import type { Plan, LoopEngineeringEvent } from "./events.js";
 import type { AgentMode, AgentRunner } from "./types.js";
 import {
   PlanExecuteRunner,
@@ -139,9 +139,8 @@ function areVerificationsIdentical(
 
 const MAX_RETRIES = 3;
 
-export class LoopEngineeringRunner implements AgentRunner {
+export class LoopEngineeringRunner implements AgentRunner<LoopEngineeringEvent> {
   readonly mode: AgentMode = "loop-engineering";
-  private _conversationMessages: Message[] = [];
   private planExecuteRunner: PlanExecuteRunner;
   private verifier: LLMVerifier;
 
@@ -158,7 +157,7 @@ export class LoopEngineeringRunner implements AgentRunner {
   // ==========================================================================
 
   get conversationMessages(): readonly Message[] {
-    return this._conversationMessages;
+    return this.agent.conversationMessages;
   }
 
   get systemPromptText(): string {
@@ -166,12 +165,12 @@ export class LoopEngineeringRunner implements AgentRunner {
   }
 
   setConversationMessages(messages: Message[]): void {
-    this._conversationMessages = [...messages];
+    this.agent.setConversationMessages(messages);
   }
 
   async *run(
     inputMessages: Message[],
-  ): AsyncGenerator<AgentStreamEvent, AgentResult> {
+  ): AsyncGenerator<LoopEngineeringEvent, AgentResult> {
     const outerMessages = [...inputMessages];
 
     // Extract the user's request (last user message content).
@@ -210,9 +209,8 @@ export class LoopEngineeringRunner implements AgentRunner {
       let pePlan: Plan | undefined;
       const peLogParts: string[] = [];
 
-      // We need to sync the plan-execute runner's conversation state
-      // for each attempt. Reset it before each attempt.
-      this.planExecuteRunner.setConversationMessages([]);
+      // Build fresh messages for each attempt — run() does not read
+      // from agent state, it only writes the final result at end.
 
       try {
         for await (const event of this.planExecuteRunner.run(peMessages)) {
@@ -315,7 +313,7 @@ export class LoopEngineeringRunner implements AgentRunner {
           },
         ];
 
-        this._conversationMessages = finalMessages;
+        this.agent.setConversationMessages(finalMessages);
 
         const result: AgentResult = {
           success: true,
@@ -395,7 +393,7 @@ export class LoopEngineeringRunner implements AgentRunner {
       },
     ];
 
-    this._conversationMessages = finalMessages;
+    this.agent.setConversationMessages(finalMessages);
 
     const result: AgentResult = {
       success: false,

@@ -59,11 +59,15 @@ export class AppLoop {
             // when use skill return chat
             await this.display.renderTurn(
               this.coordinator.executeTurn(result.input),
+              this.coordinator.currentMode,
             );
           }
           // result.type === "handled" pass
         } else {
-          await this.display.renderTurn(this.coordinator.executeTurn(input));
+          await this.display.renderTurn(
+            this.coordinator.executeTurn(input),
+            this.coordinator.currentMode,
+          );
         }
         this.display.println("");
       } catch (err) {

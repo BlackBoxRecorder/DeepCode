@@ -48,25 +48,17 @@ export interface AgentResult {
 }
 
 // ============================================================================
-// Plan-Execute Types
+// Plan-Execute Types — re-exported from runner for backward compat
 // ============================================================================
 
-/** A single sub-task within a plan. */
-export interface PlanTask {
-  id: string;
-  goal: string;
-  status: "pending" | "running" | "done" | "failed";
-  result?: string;
-}
+// Plan, PlanTask, PlanExecuteEvent, LoopEngineeringEvent are now defined in
+// src/runner/events.ts. Re-export for consumers that still import from here.
+export type { Plan, PlanTask } from "./runner/events.js";
 
-/** A plan: an ordered list of sub-tasks decomposed from a user request. */
-export interface Plan {
-  tasks: PlanTask[];
-  /** Reserved for future DAG support. */
-  dependencies?: Record<string, string[]>;
-}
-
-/** Events emitted during a streaming agent run */
+/** Events emitted by the Agent itself during a streaming run.
+ *  Only includes what Agent.runWithMessages() directly yields.
+ *  Higher-level events (plan_generated, task_start, verification, etc.)
+ *  are emitted by runners and defined in runner/events.ts. */
 export type AgentStreamEvent =
   | { type: "chunk"; chunk: LLMStreamChunk }
   | {
@@ -76,42 +68,6 @@ export type AgentStreamEvent =
       result: ToolResult;
     }
   | { type: "done"; result: AgentResult }
-  // Plan-Execute events (emitted by PlanExecuteRunner)
-  | { type: "plan_generated"; plan: Plan }
-  | {
-      type: "task_start";
-      taskId: string;
-      goal: string;
-      index: number;
-      total: number;
-    }
-  | {
-      type: "task_progress";
-      taskId: string;
-      event: AgentStreamEvent;
-    }
-  | {
-      type: "task_done";
-      taskId: string;
-      status: "done" | "failed";
-      result?: string;
-    }
-  | { type: "plan_complete"; plan: Plan; result: AgentResult }
-  // Loop-Engineering events (emitted by LoopEngineeringRunner)
-  | {
-      type: "verification";
-      attempt: number;
-      passed: boolean;
-      reason: string;
-      suggestion?: string;
-    }
-  | {
-      type: "loop_retry";
-      attempt: number;
-      maxAttempts: number;
-      reason: string;
-      suggestion?: string;
-    }
   // Auto-upgrade event (ReAct → Plan-Execute)
   | {
       type: "upgrade_requested";
@@ -119,19 +75,13 @@ export type AgentStreamEvent =
       reason: string;
     };
 
-// ============================================================================
-// Loop-Engineering Types
-// ============================================================================
+// Plan, PlanTask, VerificationResult are now in runner/events.ts and
+// runner/loop-engineering-runner.ts. Re-export for backward compat.
 
-/** Result of a Verifier evaluation. */
-export interface VerificationResult {
-  passed: boolean;
-  reason: string;
-  suggestion?: string;
-}
-
-// Re-export VerificationRecord from session for convenience.
-export type { VerificationRecord } from "./session.js";
+export type {
+  VerificationResult,
+  Verifier,
+} from "./runner/loop-engineering-runner.js";
 
 /** Log entry for a tool call */
 export interface ToolCallLog {

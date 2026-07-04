@@ -5,8 +5,12 @@
  * Owns conversation state so display adapters (CLI, future TUI) don't need to.
  */
 import type { Message, LLMClient } from "./llm/index.js";
-import type { AgentStreamEvent, AgentResult, Agent } from "./index.js";
-import type { AgentRunner, AgentMode } from "./runner/index.js";
+import type { AgentResult, Agent } from "./index.js";
+import type {
+  AgentRunner,
+  AgentMode,
+  RunnerStreamEvent,
+} from "./runner/index.js";
 import { PlanExecuteRunner } from "./runner/index.js";
 import {
   SessionManager,
@@ -21,9 +25,9 @@ import {
 // Types
 // ============================================================================
 
-/** Events yielded during turn execution. Extends Agent's own events. */
+/** Events yielded during turn execution. Extends runner events. */
 export type TurnEvent =
-  | AgentStreamEvent
+  | RunnerStreamEvent
   | { type: "session_created"; sessionId: string; title: string }
   | { type: "save_error"; error: string }
   | { type: "agent_error"; error: string }
@@ -231,30 +235,13 @@ export class ConversationCoordinator {
       const reExecResult = yield* this._runAndCollect(newTurnInput, userInput);
 
       // Persist the re-executed turn (only if it completed normally).
-      if (
-        reExecResult.type === "normal" &&
-        this._sessionId &&
-        reExecResult.result
-      ) {
-        const reMessagesBefore = messagesBefore; // new runner starts fresh
-        const turnMessages =
-          reExecResult.result.allMessages.slice(reMessagesBefore);
-        if (turnMessages.length > 0) {
-          const turnRecord: TurnRecord = {
-            type: "turn",
-            timestamp: new Date().toISOString(),
-            userInput,
-            messages: turnMessages,
-            plan: reExecResult.planRecord,
-            subTasks:
-              reExecResult.subTaskRecords.length > 0
-                ? reExecResult.subTaskRecords
-                : undefined,
-            verifications:
-              reExecResult.verificationRecords.length > 0
-                ? reExecResult.verificationRecords
-                : undefined,
-          };
+      if (reExecResult.type === "normal" && this._sessionId) {
+        const turnRecord = this._buildTurnRecord(
+          userInput,
+          messagesBefore,
+          reExecResult,
+        );
+        if (turnRecord) {
           try {
             await this.sessionManager.appendTurn(this._sessionId, turnRecord);
           } catch (err) {
@@ -269,24 +256,13 @@ export class ConversationCoordinator {
     }
 
     // Normal execution: persist the turn.
-    if (this._sessionId && execResult.result) {
-      const turnMessages = execResult.result.allMessages.slice(messagesBefore);
-      if (turnMessages.length > 0) {
-        const turnRecord: TurnRecord = {
-          type: "turn",
-          timestamp: new Date().toISOString(),
-          userInput,
-          messages: turnMessages,
-          plan: execResult.planRecord,
-          subTasks:
-            execResult.subTaskRecords.length > 0
-              ? execResult.subTaskRecords
-              : undefined,
-          verifications:
-            execResult.verificationRecords.length > 0
-              ? execResult.verificationRecords
-              : undefined,
-        };
+    if (execResult.type === "normal" && this._sessionId) {
+      const turnRecord = this._buildTurnRecord(
+        userInput,
+        messagesBefore,
+        execResult,
+      );
+      if (turnRecord) {
         try {
           await this.sessionManager.appendTurn(this._sessionId, turnRecord);
         } catch (err) {
@@ -297,6 +273,36 @@ export class ConversationCoordinator {
         }
       }
     }
+  }
+
+  // ==========================================================================
+  // Persistence helper
+  // ==========================================================================
+
+  /** Build a TurnRecord from execution metadata. Returns null if no messages to save. */
+  private _buildTurnRecord(
+    userInput: string,
+    messagesBefore: number,
+    execResult: Extract<RunCollectResult, { type: "normal" }>,
+  ): TurnRecord | null {
+    const messages = execResult.result?.allMessages.slice(messagesBefore);
+    if (!messages || messages.length === 0) return null;
+
+    return {
+      type: "turn",
+      timestamp: new Date().toISOString(),
+      userInput,
+      messages,
+      plan: execResult.planRecord,
+      subTasks:
+        execResult.subTaskRecords.length > 0
+          ? execResult.subTaskRecords
+          : undefined,
+      verifications:
+        execResult.verificationRecords.length > 0
+          ? execResult.verificationRecords
+          : undefined,
+    };
   }
 
   // ==========================================================================

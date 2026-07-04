@@ -9,13 +9,13 @@
  */
 import type { Message } from "../llm/index.js";
 import type { LLMClient } from "../llm/index.js";
-import type { Agent } from "../index.js";
+import type { Agent, AgentResult } from "../index.js";
 import type {
   AgentStreamEvent,
-  AgentResult,
+  PlanExecuteEvent,
   Plan,
   PlanTask,
-} from "../index.js";
+} from "./events.js";
 import type { AgentMode, AgentRunner } from "./types.js";
 
 // ============================================================================
@@ -84,9 +84,8 @@ function parsePlanJson(raw: string): Plan | null {
 // PlanExecuteRunner
 // ============================================================================
 
-export class PlanExecuteRunner implements AgentRunner {
+export class PlanExecuteRunner implements AgentRunner<PlanExecuteEvent> {
   readonly mode: AgentMode = "plan-execute";
-  private _conversationMessages: Message[] = [];
 
   constructor(
     private plannerLLM: LLMClient,
@@ -98,7 +97,7 @@ export class PlanExecuteRunner implements AgentRunner {
   // ==========================================================================
 
   get conversationMessages(): readonly Message[] {
-    return this._conversationMessages;
+    return this.agent.conversationMessages;
   }
 
   get systemPromptText(): string {
@@ -106,12 +105,12 @@ export class PlanExecuteRunner implements AgentRunner {
   }
 
   setConversationMessages(messages: Message[]): void {
-    this._conversationMessages = [...messages];
+    this.agent.setConversationMessages(messages);
   }
 
   async *run(
     inputMessages: Message[],
-  ): AsyncGenerator<AgentStreamEvent, AgentResult> {
+  ): AsyncGenerator<PlanExecuteEvent, AgentResult> {
     // Copy input — we'll append the final summary at the end.
     const outerMessages = [...inputMessages];
 
@@ -148,7 +147,7 @@ export class PlanExecuteRunner implements AgentRunner {
         role: "assistant",
         content: `Plan generation failed: ${errorMsg}`,
       });
-      this._conversationMessages = outerMessages;
+      this.agent.setConversationMessages(outerMessages);
       const result: AgentResult = {
         success: false,
         content: `Plan generation failed: ${errorMsg}`,
@@ -249,7 +248,7 @@ export class PlanExecuteRunner implements AgentRunner {
       },
     ];
 
-    this._conversationMessages = finalAgentMessages;
+    this.agent.setConversationMessages(finalAgentMessages);
 
     const result: AgentResult = {
       success: allSuccess,

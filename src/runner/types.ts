@@ -5,7 +5,8 @@
  * interface so the Coordinator can treat them interchangeably.
  */
 import type { Message } from "../llm/index.js";
-import type { AgentStreamEvent, AgentResult } from "../index.js";
+import type { AgentResult } from "../index.js";
+import type { RunnerStreamEvent } from "./events.js";
 
 // ============================================================================
 // Types
@@ -19,12 +20,16 @@ export type AgentMode = "react" | "plan-execute" | "loop-engineering";
  *
  * Each implementation wraps the underlying Agent (or composes multiple Agents)
  * and presents the same streaming execution contract to the Coordinator.
+ *
+ * @typeParam TEvents - The event type this specific runner yields.
+ *   Defaults to RunnerStreamEvent (the combined union) for consumers
+ *   that don't care about the specific mode.
  */
-export interface AgentRunner {
+export interface AgentRunner<TEvents = RunnerStreamEvent> {
   /** The Agent Loop mode this runner implements. */
   readonly mode: AgentMode;
 
-  /** Current conversation messages (owned by the runner). */
+  /** Current conversation messages. */
   readonly conversationMessages: readonly Message[];
 
   /** System prompt used for constructing message lists. */
@@ -37,5 +42,5 @@ export interface AgentRunner {
    * Execute the agent loop with a pre-built message list.
    * Yields streaming events for real-time display.
    */
-  run(inputMessages: Message[]): AsyncGenerator<AgentStreamEvent, AgentResult>;
+  run(inputMessages: Message[]): AsyncGenerator<TEvents, AgentResult>;
 }

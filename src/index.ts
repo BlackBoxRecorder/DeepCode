@@ -96,7 +96,36 @@ export type AgentStreamEvent =
       status: "done" | "failed";
       result?: string;
     }
-  | { type: "plan_complete"; plan: Plan; result: AgentResult };
+  | { type: "plan_complete"; plan: Plan; result: AgentResult }
+  // Loop-Engineering events (emitted by LoopEngineeringRunner)
+  | {
+      type: "verification";
+      attempt: number;
+      passed: boolean;
+      reason: string;
+      suggestion?: string;
+    }
+  | {
+      type: "loop_retry";
+      attempt: number;
+      maxAttempts: number;
+      reason: string;
+      suggestion?: string;
+    };
+
+// ============================================================================
+// Loop-Engineering Types
+// ============================================================================
+
+/** Result of a Verifier evaluation. */
+export interface VerificationResult {
+  passed: boolean;
+  reason: string;
+  suggestion?: string;
+}
+
+// Re-export VerificationRecord from session for convenience.
+export type { VerificationRecord } from "./session.js";
 
 /** Log entry for a tool call */
 export interface ToolCallLog {

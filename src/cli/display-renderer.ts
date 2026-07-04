@@ -111,6 +111,28 @@ export class DisplayRenderer {
             }
             break;
           }
+          case "verification": {
+            const vMarker = event.passed ? "✓ VERIFIED" : "✗ FAILED";
+            this.stdout.write(`\n[Attempt ${event.attempt}] ${vMarker}`);
+            if (event.reason) {
+              this.stdout.write(`\n  Reason: ${event.reason}`);
+            }
+            if (event.suggestion) {
+              this.stdout.write(`\n  Suggestion: ${event.suggestion}`);
+            }
+            this.stdout.write("\n");
+            break;
+          }
+          case "loop_retry": {
+            this.stdout.write(
+              `\n[Retry ${event.attempt}/${event.maxAttempts}] ${event.reason}`,
+            );
+            if (event.suggestion) {
+              this.stdout.write(`\n  → ${event.suggestion}`);
+            }
+            this.stdout.write("\n");
+            break;
+          }
           case "chunk": {
             const { delta } = event.chunk;
             if (delta.reasoning_content) {

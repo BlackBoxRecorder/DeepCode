@@ -98,7 +98,7 @@ export class CommandRouter {
     this.display.println("  /new        - Start a new session");
     this.display.println("  /sessions   - List session history");
     this.display.println("  /continue <id> - Continue a previous session");
-    this.display.println("  /mode <react|plan>   - Switch agent loop mode");
+    this.display.println("  /mode <react|plan|loop>   - Switch agent loop mode");
     this.display.println("  /tools      - List available tools");
     this.display.println("  /skills     - List available skills");
     this.display.println("  /skill:<name> - Invoke a skill by name");
@@ -196,7 +196,7 @@ export class CommandRouter {
     const parts = cmd.split(/\s+/);
     if (parts.length < 2) {
       this.display.println(`Current mode: ${this.coordinator.currentMode}`);
-      this.display.println("Usage: /mode <react|plan>");
+      this.display.println("Usage: /mode <react|plan|loop>");
       return { type: "handled" };
     }
 
@@ -206,18 +206,19 @@ export class CommandRouter {
       react: "react",
       plan: "plan-execute",
       "plan-execute": "plan-execute",
+      loop: "loop-engineering",
       "loop-engineering": "loop-engineering",
     };
     const mode = modeMap[rawMode];
     if (!mode) {
       this.display.println(
-        `Invalid mode: ${rawMode}. Valid modes: react, plan`,
+        `Invalid mode: ${rawMode}. Valid modes: react, plan, loop`,
       );
       return { type: "handled" };
     }
 
     try {
-      this.coordinator.setMode(mode);
+      await this.coordinator.setMode(mode);
       this.display.println(`Switched to mode: ${mode}`);
     } catch (err) {
       this.display.println(err instanceof Error ? err.message : String(err));

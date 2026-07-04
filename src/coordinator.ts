@@ -14,6 +14,7 @@ import {
   type TurnRecord,
   type PlanRecord,
   type SubTaskRecord,
+  type VerificationRecord,
 } from "./session.js";
 
 // ============================================================================
@@ -74,7 +75,7 @@ export class ConversationCoordinator {
   /**
    * Switch the Agent Loop mode.
    */
-  setMode(mode: AgentMode): void {
+  async setMode(mode: AgentMode): Promise<void> {
     if (mode === this.currentRunner.mode) return; // Already in this mode
 
     if (mode === "plan-execute") {
@@ -84,6 +85,25 @@ export class ConversationCoordinator {
         );
       }
       const newRunner = new PlanExecuteRunner(this.llm, this.agent);
+      newRunner.setConversationMessages([
+        ...this.currentRunner.conversationMessages,
+      ]);
+      this.currentRunner = newRunner;
+      return;
+    }
+
+    if (mode === "loop-engineering") {
+      if (!this.llm || !this.agent) {
+        throw new Error(
+          "Cannot switch to loop-engineering: coordinator was not configured with LLM and Agent.",
+        );
+      }
+      // Dynamic import to avoid circular dependency at module level
+      // LoopEngineeringRunner is imported here lazily.
+      const { LoopEngineeringRunner } = await import(
+        "./runner/loop-engineering-runner.js"
+      );
+      const newRunner = new LoopEngineeringRunner(this.llm, this.agent);
       newRunner.setConversationMessages([
         ...this.currentRunner.conversationMessages,
       ]);
@@ -167,6 +187,7 @@ export class ConversationCoordinator {
     // Collect plan-execute metadata from stream events.
     let planRecord: PlanRecord | undefined;
     const subTaskRecords: SubTaskRecord[] = [];
+    const verificationRecords: VerificationRecord[] = [];
 
     // Run runner (runner copies input internally — no mutation on our array)
     let result: AgentResult | undefined;
@@ -196,6 +217,15 @@ export class ConversationCoordinator {
             task.status = event.status;
             task.result = event.result;
           }
+        }
+        if (event.type === "verification") {
+          verificationRecords.push({
+            attempt: event.attempt,
+            passed: event.passed,
+            reason: event.reason,
+            suggestion: event.suggestion,
+            timestamp: new Date().toISOString(),
+          });
         }
         if (event.type === "done") {
           result = event.result;
@@ -255,6 +285,8 @@ export class ConversationCoordinator {
           messages: turnMessages,
           plan: planRecord,
           subTasks: subTaskRecords.length > 0 ? subTaskRecords : undefined,
+          verifications:
+            verificationRecords.length > 0 ? verificationRecords : undefined,
         };
         try {
           await this.sessionManager.appendTurn(this._sessionId, turnRecord);

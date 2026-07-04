@@ -49,6 +49,17 @@ export interface TurnRecord {
   plan?: PlanRecord;
   /** Sub-task execution records — present when the turn ran in plan-execute mode. */
   subTasks?: SubTaskRecord[];
+  /** Verification records — present when the turn ran in loop-engineering mode. */
+  verifications?: VerificationRecord[];
+}
+
+/** Record of a single verification attempt. */
+export interface VerificationRecord {
+  attempt: number;
+  passed: boolean;
+  reason: string;
+  suggestion?: string;
+  timestamp: string;
 }
 
 // ============================================================================

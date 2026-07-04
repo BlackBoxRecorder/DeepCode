@@ -416,7 +416,7 @@ describe("ConversationCoordinator — plan-execute mode", () => {
   // Mode switching
   // ------------------------------------------------------------------
 
-  it("should switch to plan-execute mode when configured", () => {
+  it("should switch to plan-execute mode when configured", async () => {
     const plannerLLM = createMockPlannerLLM("{}");
     const agentLLM = createMockAgentLLM("ok");
     const agent = new Agent({ llm: agentLLM, tools: [] });
@@ -430,11 +430,11 @@ describe("ConversationCoordinator — plan-execute mode", () => {
     });
 
     expect(coordinator.currentMode).toBe("react");
-    coordinator.setMode("plan-execute");
+    await coordinator.setMode("plan-execute");
     expect(coordinator.currentMode).toBe("plan-execute");
   });
 
-  it("should throw when switching to plan-execute without LLM/Agent config", () => {
+  it("should throw when switching to plan-execute without LLM/Agent config", async () => {
     const agentLLM = createMockAgentLLM("ok");
     const agent = new Agent({ llm: agentLLM, tools: [] });
     const reactRunner = new ReActRunner(agent);
@@ -444,7 +444,7 @@ describe("ConversationCoordinator — plan-execute mode", () => {
       sessionManager,
     });
 
-    expect(() => coordinator.setMode("plan-execute")).toThrow("not configured");
+    await expect(coordinator.setMode("plan-execute")).rejects.toThrow("not configured");
   });
 
   // ------------------------------------------------------------------
@@ -471,7 +471,7 @@ describe("ConversationCoordinator — plan-execute mode", () => {
       agent,
     });
 
-    coordinator.setMode("plan-execute");
+    await coordinator.setMode("plan-execute");
     const events = await collectTurnEvents(coordinator, "Do two things");
 
     // Verify no errors
@@ -522,7 +522,7 @@ describe("ConversationCoordinator — plan-execute mode", () => {
       agent,
     });
 
-    coordinator.setMode("plan-execute");
+    await coordinator.setMode("plan-execute");
     const events = await collectTurnEvents(coordinator, "Do something");
 
     const eventTypes = events.map((e: any) => e.type);

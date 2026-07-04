@@ -42,9 +42,8 @@ Rules:
 // Helpers
 // ============================================================================
 
-/** Try to parse JSON from LLM output, handling markdown code fences. */
-function parsePlanJson(raw: string): Plan | null {
-  // Strip markdown code fences if present
+/** Strip markdown code fences from LLM output. */
+export function stripMarkdownCodeFences(raw: string): string {
   let text = raw.trim();
   if (text.startsWith("```")) {
     const endFence = text.indexOf("\n", 3);
@@ -57,6 +56,12 @@ function parsePlanJson(raw: string): Plan | null {
     }
     text = text.trim();
   }
+  return text;
+}
+
+/** Try to parse JSON from LLM output, handling markdown code fences. */
+function parsePlanJson(raw: string): Plan | null {
+  const text = stripMarkdownCodeFences(raw);
 
   try {
     const parsed = JSON.parse(text);

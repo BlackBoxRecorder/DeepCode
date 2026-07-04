@@ -1,11 +1,39 @@
 # deepCode — 终端 AI Agent 领域术语
 
-deepCode 是一个基于 ReAct 模式的终端 AI Agent，核心能力包括 LLM 驱动的推理-行动循环、MCP 外部工具集成、文件系统与命令执行、技能系统以及会话持久化管理。
+deepCode 是一个支持多模式 Agent Loop 的终端 AI Agent，核心能力包括 LLM 驱动的推理-行动循环、MCP 外部工具集成、文件系统与命令执行、技能系统以及会话持久化管理。支持三种 Agent Loop 模式：ReAct（推理-行动）、Plan-Execute（计划-执行）、Loop Engineering（计划-执行-验证-重试）。
 
 ## Agent（核心引擎）
 
 **Agent**：
 一个运行 ReAct（推理-行动）循环的执行引擎。接收用户消息，循环调用 LLM 获取响应，解析工具调用并执行，直到 LLM 返回最终回答或达到最大迭代次数。
+
+**AgentMode**：
+Agent 的 Loop 执行模式。三种模式：`react`（ReAct 推理-行动循环）、`plan-execute`（先规划后执行）、`loop-engineering`（规划-执行-验证-重试）。模式通过 `/mode` 命令显式切换，或由 LLM 在 ReAct 中自动升级到 Plan 模式。
+*避免*：Agent type, execution strategy
+
+**AgentRunner**：
+统一的多模式执行器接口（`{ mode, run() }`）。ReActRunner 为默认实现，PlanExecuteRunner 内部组合 Planner + 多个 ReAct 子任务，LoopEngineeringRunner 在其上叠加 Verifier 与重试逻辑。Coordinator 持有当前 Runner 引用，模式切换时替换实例。
+*避免*：Loop strategy, execution engine
+
+**Plan-Execute（计划-执行模式）**：
+先规划后执行的 Agent Loop 模式。Planner（独立 LLM 调用）将用户任务分解为目标驱动的子任务列表，Executor 依次将每个子任务作为独立 ReAct session 执行。V1 不做重规划。
+*避免*：Plan-and-execute, P&E
+
+**Loop Engineering（循环工程模式）**：
+Plan-Execute + Verifier + 重试的 Agent Loop 模式。在 Plan-Execute 执行完成后，由独立的 Verifier LLM 评估结果是否达标；未达标则重新规划并重试（默认最多 3 次），辅以无进展检测（连续相同结果提前终止）。遵循 PDCA（Plan-Do-Check-Act）循环。
+*避免*：Self-healing loop, autonomous loop
+
+**Planner（规划器）**：
+Plan-Execute / Loop Engineering 模式中的规划组件。独立的 LLM 调用（`tool_choice: "none"`），接收用户任务，输出目标驱动的子任务列表。使用专属 planner prompt，不访问工具。
+*避免*：Task decomposer, plan generator
+
+**Plan（计划）**：
+Planner 生成的子任务列表。每个 PlanTask 包含唯一 id、自然语言 goal、执行状态（pending/running/done/failed）和可选的执行结果。V1 为线性列表，预留 dependencies 字段用于未来 DAG 升级。
+*避免*：Task list, execution plan
+
+**Verifier（验证器）**：
+Loop Engineering 模式中的独立验证组件。接收原始目标、执行结果和执行日志，返回通过/未通过判断及原因。V1 用 LLM 调用实现，接口（`Verifier`）预留程序化验证扩展点。
+*避免*：Checker, validator agent
 
 **ReAct Loop**：
 LLM 驱动的推理-行动循环：LLM 接收对话历史→返回思考或工具调用→Agent 解析并执行工具→将结果反馈给 LLM→重复直到 LLM 给出最终回答。

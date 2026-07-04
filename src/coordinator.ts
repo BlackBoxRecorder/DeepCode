@@ -8,7 +8,7 @@ import type { Message, LLMClient } from "./llm/index.js";
 import type { AgentResult, Agent } from "./index.js";
 import { AgentMode } from "./runner/index.js";
 import type { AgentRunner, RunnerStreamEvent } from "./runner/index.js";
-import { PlanExecuteRunner } from "./runner/index.js";
+import { PlanExecuteRunner, LoopEngineeringRunner } from "./runner/index.js";
 import {
   SessionManager,
   type SessionMeta,
@@ -123,10 +123,6 @@ export class ConversationCoordinator {
           "Cannot switch to loop-engineering: coordinator was not configured with LLM and Agent.",
         );
       }
-      // Dynamic import to avoid circular dependency at module level
-      // LoopEngineeringRunner is imported here lazily.
-      const { LoopEngineeringRunner } =
-        await import("./runner/loop-engineering-runner.js");
       const newRunner = new LoopEngineeringRunner(this.llm, this.agent);
       newRunner.setConversationMessages([
         ...this.currentRunner.conversationMessages,

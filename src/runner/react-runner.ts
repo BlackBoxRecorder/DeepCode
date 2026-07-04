@@ -7,7 +7,7 @@
  */
 import type { Message } from "../llm/index.js";
 import type { Agent } from "../index.js";
-import type { AgentMode, AgentRunner } from "./types.js";
+import { AgentMode, type AgentRunner } from "./types.js";
 import type { AgentStreamEvent, AgentResult } from "../index.js";
 
 // ============================================================================
@@ -27,7 +27,7 @@ IMPORTANT — Complexity Assessment: Before responding, assess whether the user'
 // ============================================================================
 
 export class ReActRunner implements AgentRunner {
-  readonly mode: AgentMode = "react";
+  readonly mode: AgentMode = AgentMode.react;
 
   constructor(private agent: Agent) {}
 

@@ -16,7 +16,7 @@ import type {
   Plan,
   PlanTask,
 } from "./events.js";
-import type { AgentMode, AgentRunner } from "./types.js";
+import { AgentMode, type AgentRunner } from "./types.js";
 
 // ============================================================================
 // Planner Prompt
@@ -85,7 +85,7 @@ function parsePlanJson(raw: string): Plan | null {
 // ============================================================================
 
 export class PlanExecuteRunner implements AgentRunner<PlanExecuteEvent> {
-  readonly mode: AgentMode = "plan-execute";
+  readonly mode: AgentMode = AgentMode.plan;
 
   constructor(
     private plannerLLM: LLMClient,

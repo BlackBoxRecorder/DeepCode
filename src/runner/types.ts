@@ -13,7 +13,11 @@ import type { RunnerStreamEvent } from "./events.js";
 // ============================================================================
 
 /** Supported Agent Loop modes. */
-export type AgentMode = "react" | "plan-execute" | "loop-engineering";
+export enum AgentMode {
+  react = "react",
+  plan = "plan",
+  loop = "loop",
+}
 
 /**
  * Unified runner interface for all Agent Loop modes.

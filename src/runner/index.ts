@@ -4,7 +4,7 @@
  * Re-exports the AgentRunner interface, AgentMode type, event types,
  * and the default ReActRunner implementation.
  */
-export { type AgentMode, type AgentRunner } from "./types.js";
+export { AgentMode, type AgentRunner } from "./types.js";
 export { ReActRunner } from "./react-runner.js";
 export {
   PlanExecuteRunner,

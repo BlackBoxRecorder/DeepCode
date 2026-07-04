@@ -91,7 +91,7 @@ export class ReActRenderingAdapter implements RenderingAdapter {
 // ============================================================================
 
 export class PlanExecuteRenderingAdapter implements RenderingAdapter {
-  readonly mode = "plan-execute";
+  readonly mode = "plan";
   private reactAdapter = new ReActRenderingAdapter();
   private currentTaskId: string | null = null;
   private planTaskTotal = 0;
@@ -153,7 +153,7 @@ export class PlanExecuteRenderingAdapter implements RenderingAdapter {
 // ============================================================================
 
 export class LoopEngineeringRenderingAdapter implements RenderingAdapter {
-  readonly mode = "loop-engineering";
+  readonly mode = "loop";
   private planAdapter = new PlanExecuteRenderingAdapter();
 
   handleEvent(event: TurnEvent, ctx: RenderContext): boolean {
@@ -207,10 +207,10 @@ export function getAdapterForMode(mode: string): RenderingAdapter {
     case "react":
       adapter = new ReActRenderingAdapter();
       break;
-    case "plan-execute":
+    case "plan":
       adapter = new PlanExecuteRenderingAdapter();
       break;
-    case "loop-engineering":
+    case "loop":
       adapter = new LoopEngineeringRenderingAdapter();
       break;
     default:

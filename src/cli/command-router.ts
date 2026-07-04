@@ -9,7 +9,7 @@ import type { Tool } from "../tool-interface/index.js";
 import type { ConversationCoordinator } from "../coordinator.js";
 import type { SkillManager } from "../skills.js";
 import type { ServerStatus } from "../mcp/index.js";
-import type { AgentMode } from "../runner/index.js";
+import { AgentMode } from "../runner/index.js";
 import { DisplayRenderer } from "./display-renderer.js";
 
 // ============================================================================
@@ -205,11 +205,11 @@ export class CommandRouter {
     const rawMode = parts[1];
     // Map shorthand aliases to full mode names.
     const modeMap: Record<string, AgentMode> = {
-      react: "react",
-      plan: "plan-execute",
-      "plan-execute": "plan-execute",
-      loop: "loop-engineering",
-      "loop-engineering": "loop-engineering",
+      react: AgentMode.react,
+      plan: AgentMode.plan,
+      "plan-execute": AgentMode.plan,
+      loop: AgentMode.loop,
+      "loop-engineering": AgentMode.loop,
     };
     const mode = modeMap[rawMode];
     if (!mode) {

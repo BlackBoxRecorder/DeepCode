@@ -6,7 +6,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Agent } from "../../src/index.js";
-import { ReActRunner } from "../../src/runner/index.js";
+import { AgentMode, ReActRunner } from "../../src/runner/index.js";
 import { SessionManager } from "../../src/session.js";
 import { ConversationCoordinator } from "../../src/coordinator.js";
 import type {
@@ -453,15 +453,15 @@ describe("ConversationCoordinator", () => {
     // Should have upgrade_notice
     const upgradeNotice = events.find((e: any) => e.type === "upgrade_notice");
     expect(upgradeNotice).toBeDefined();
-    expect(upgradeNotice!.from).toBe("react");
-    expect(upgradeNotice!.to).toBe("plan-execute");
+    expect(upgradeNotice!.from).toBe(AgentMode.react);
+    expect(upgradeNotice!.to).toBe(AgentMode.plan);
 
     // Should eventually complete with done
     const doneEvent = events.find((e: any) => e.type === "done");
     expect(doneEvent).toBeDefined();
 
     // Coordinator should now be in plan-execute mode
-    expect(coordinator.currentMode).toBe("plan-execute");
+    expect(coordinator.currentMode).toBe(AgentMode.plan);
 
     await assertNoOrphanedMeta(tmpDir, sessionManager);
   });
@@ -485,7 +485,7 @@ describe("ConversationCoordinator", () => {
     });
 
     // Switch to plan-execute first
-    await coordinator.setMode("plan-execute");
+    await coordinator.setMode(AgentMode.plan);
 
     // The plan-execute runner should NOT trigger another upgrade
     const events = await consumeTurn(

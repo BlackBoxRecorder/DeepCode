@@ -6,11 +6,8 @@
  */
 import type { Message, LLMClient } from "./llm/index.js";
 import type { AgentResult, Agent } from "./index.js";
-import type {
-  AgentRunner,
-  AgentMode,
-  RunnerStreamEvent,
-} from "./runner/index.js";
+import { AgentMode } from "./runner/index.js";
+import type { AgentRunner, RunnerStreamEvent } from "./runner/index.js";
 import { PlanExecuteRunner } from "./runner/index.js";
 import {
   SessionManager,
@@ -106,7 +103,7 @@ export class ConversationCoordinator {
   async setMode(mode: AgentMode): Promise<void> {
     if (mode === this.currentRunner.mode) return; // Already in this mode
 
-    if (mode === "plan-execute") {
+    if (mode === AgentMode.plan) {
       if (!this.llm || !this.agent) {
         throw new Error(
           "Cannot switch to plan-execute: coordinator was not configured with LLM and Agent.",
@@ -120,7 +117,7 @@ export class ConversationCoordinator {
       return;
     }
 
-    if (mode === "loop-engineering") {
+    if (mode === AgentMode.loop) {
       if (!this.llm || !this.agent) {
         throw new Error(
           "Cannot switch to loop-engineering: coordinator was not configured with LLM and Agent.",
@@ -138,13 +135,13 @@ export class ConversationCoordinator {
       return;
     }
 
-    if (mode === "react") {
+    if (mode === AgentMode.react) {
       // Switching back to react — create a fresh ReActRunner.
       // The caller (app-factory) should pass agent reference, but for
       // simplicity we just keep the original runner if already react.
       // Future iterations: store a ReActRunner factory in config.
       throw new Error(
-        'Switching back to "react" mode is not supported yet. Start a new session instead.',
+        "Switching back to react mode is not supported yet. Start a new session instead.",
       );
     }
 
@@ -218,12 +215,12 @@ export class ConversationCoordinator {
       // Auto-upgrade triggered: switch to plan-execute and re-execute.
       yield {
         type: "upgrade_notice",
-        from: "react",
-        to: "plan-execute",
+        from: AgentMode.react,
+        to: AgentMode.plan,
         reason: execResult.reason,
       };
 
-      await this.setMode("plan-execute");
+      await this.setMode(AgentMode.plan);
 
       // Build fresh turn input for new runner (it has its own conversation
       // state seeded from the previous runner).

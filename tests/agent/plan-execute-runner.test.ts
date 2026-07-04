@@ -7,7 +7,11 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Agent } from "../../src/index.js";
-import { ReActRunner, PlanExecuteRunner } from "../../src/runner/index.js";
+import {
+  AgentMode,
+  ReActRunner,
+  PlanExecuteRunner,
+} from "../../src/runner/index.js";
 import { SessionManager } from "../../src/session.js";
 import { ConversationCoordinator } from "../../src/coordinator.js";
 import type {
@@ -367,7 +371,7 @@ describe("PlanExecuteRunner", () => {
     const agent = new Agent({ llm: agentLLM, tools: [] });
     const runner = new PlanExecuteRunner(plannerLLM, agent);
 
-    expect(runner.mode).toBe("plan-execute");
+    expect(runner.mode).toBe(AgentMode.plan);
     expect(Array.isArray(runner.conversationMessages)).toBe(true);
     expect(typeof runner.systemPromptText).toBe("string");
     expect(typeof runner.setConversationMessages).toBe("function");
@@ -429,9 +433,9 @@ describe("ConversationCoordinator — plan-execute mode", () => {
       agent,
     });
 
-    expect(coordinator.currentMode).toBe("react");
-    await coordinator.setMode("plan-execute");
-    expect(coordinator.currentMode).toBe("plan-execute");
+    expect(coordinator.currentMode).toBe(AgentMode.react);
+    await coordinator.setMode(AgentMode.plan);
+    expect(coordinator.currentMode).toBe(AgentMode.plan);
   });
 
   it("should throw when switching to plan-execute without LLM/Agent config", async () => {
@@ -444,7 +448,7 @@ describe("ConversationCoordinator — plan-execute mode", () => {
       sessionManager,
     });
 
-    await expect(coordinator.setMode("plan-execute")).rejects.toThrow(
+    await expect(coordinator.setMode(AgentMode.plan)).rejects.toThrow(
       "not configured",
     );
   });
@@ -473,7 +477,7 @@ describe("ConversationCoordinator — plan-execute mode", () => {
       agent,
     });
 
-    await coordinator.setMode("plan-execute");
+    await coordinator.setMode(AgentMode.plan);
     const events = await collectTurnEvents(coordinator, "Do two things");
 
     // Verify no errors
@@ -524,7 +528,7 @@ describe("ConversationCoordinator — plan-execute mode", () => {
       agent,
     });
 
-    await coordinator.setMode("plan-execute");
+    await coordinator.setMode(AgentMode.plan);
     const events = await collectTurnEvents(coordinator, "Do something");
 
     const eventTypes = events.map((e: any) => e.type);

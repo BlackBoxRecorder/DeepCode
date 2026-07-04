@@ -12,7 +12,7 @@
 import type { Message, LLMClient } from "../llm/index.js";
 import type { Agent, AgentResult } from "../index.js";
 import type { Plan, LoopEngineeringEvent } from "./events.js";
-import type { AgentMode, AgentRunner } from "./types.js";
+import { AgentMode, type AgentRunner } from "./types.js";
 import {
   PlanExecuteRunner,
   stripMarkdownCodeFences,
@@ -140,7 +140,7 @@ function areVerificationsIdentical(
 const MAX_RETRIES = 3;
 
 export class LoopEngineeringRunner implements AgentRunner<LoopEngineeringEvent> {
-  readonly mode: AgentMode = "loop-engineering";
+  readonly mode: AgentMode = AgentMode.loop;
   private planExecuteRunner: PlanExecuteRunner;
   private verifier: LLMVerifier;
 
